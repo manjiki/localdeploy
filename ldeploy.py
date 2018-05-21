@@ -1,5 +1,5 @@
 #!/usr/bin/python
-#from __future__ import with_statement
+from __future__ import print_function
 __author__ = 'effie mouzeli'
 import argparse
 import os
@@ -9,6 +9,7 @@ import hashlib
 import sys
 import subprocess
 from shutil import move
+from io import BytesIO
 
 # NOTE: This script assumes that latest/, current/, archive/ directories are present
 # TODO: Remove jar from variable names, use "jar" extention as default though
@@ -33,12 +34,12 @@ def set_global_vars(app_id):
         ARCHIVE_DIR = '{0}/archive'.format(APP_DATA['app_root'])
         CURRENT_DIR = '{0}/current'.format(APP_DATA['app_root'])
     except EnvironmentError:
-        print 'Application {0} is not here, file {1} does not exist\n'.format(app_id, os.path.join(DEFAULT_PATH, app_id))
+        print('Application {0} is not here, file {1} does not exist.\n'.format(app_id, os.path.join(DEFAULT_PATH, app_id)))
         sys.exit(1)
 
 
 def calc_md5(file_):
-    with open(file_, "r+") as this_file:
+    with open(file_, "rb") as this_file:
         md5 = hashlib.md5()
         while True:
             bf = this_file.read(1024)
@@ -51,13 +52,13 @@ def calc_md5(file_):
 def service_status(service):
     status_cmd = '/bin/systemctl status {0}.service'.format(service)
     status_run = subprocess.Popen(status_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    status_err = status_run.communicate()[1]
+    status_out = status_run.communicate()
+    status_err = status_out[1].decode("utf-8")
     if 'could not be found' in status_err:
         print('\nService COULD NOT be found, have you run systemctl daemon-reload?\n')
         sys.exit(1)
-    status_out = status_run.communicate()[0].split('\n')
-    for line in status_out:
-        print('one+ '+line)
+    status_std = status_out[0].decode("utf-8").split('\n')# Python3 compatibility
+    for line in status_std:
         if 'Active:' in line:
             if '(running)' in line:
                 return True
@@ -77,24 +78,24 @@ def systemd(command, service):
             stop_cmd = '/bin/systemctl stop {0}.service'.format(service)
             stop_run = subprocess.Popen(stop_cmd, shell=True, stdout=subprocess.PIPE)
             stop_run.communicate()
-            print 'Service {0} stopped'.format(service)
+            print('Service {0} stopped'.format(service))
             return True
         else:
-            print 'Service {0} is already stopped'.format(service)
+            print('Service {0} is already stopped'.format(service))
             return False
     if command == "start":
         if status:
-            print 'Service {0} is already running'.format(service)
+            print('Service {0} is already running'.format(service))
             return False
         else:
             start_cmd = '/bin/systemctl start {0}.service'.format(service)
             start_run = subprocess.Popen(start_cmd, shell=True, stdout=subprocess.PIPE)
             start_run.communicate()
             if service_status(service):
-                print 'Service {0} started'.format(service)
+                print('Service {0} started'.format(service))
                 return True
             else:
-                print 'Service {0} did NOT start'.format(service)
+                print('Service {0} did NOT start'.format(service))
                 # This is bad, we exit
                 sys.exit(1)
 
@@ -103,9 +104,9 @@ def systemd(command, service):
 # Returns an ordered list of matching files, Index 0 being the newest.
 
 def order_files(path, app_id, type_="jar"):
-    mtime = lambda f: os.stat(os.path.join(path, f)).st_mtime
+    mtime = lambda file_: os.stat(os.path.join(path, file_)).st_mtime
     file_list = list(sorted(os.listdir(path), key=mtime, reverse=True))
-    for f in file_list:
+    for f in list(file_list):
         if type_ not in f:
             file_list.remove(f)
         else:
@@ -123,19 +124,19 @@ def find_candidate_files(app_id, build_id, type_="jar"):
     try:
         source = os.path.join(TMP_DIR, order_files(TMP_DIR, app_id)[0])
     except IndexError:
-        print 'No deployment candidates found in {0}, exiting'.format(TMP_DIR)
+        print('No deployment candidates found in {0}, exiting'.format(TMP_DIR))
         sys.exit(1)
     try:
         latest = os.path.join(LATEST_DIR, order_files(LATEST_DIR, app_id)[0])
         source_hash = calc_md5(source)
         latest_hash = calc_md5(latest)
     except IndexError:
-        print '{0} is empty, this is First Deployment'.format(LATEST_DIR)
+        print('{0} is empty, this is First Deployment'.format(LATEST_DIR))
         return source, destination
     if source_hash == latest_hash:
-        print source_hash, source
-        print latest_hash, latest
-        print 'Nothing to deploy, source file in {0} is same as {1}'.format(source, latest)
+        print(source_hash, source)
+        print(latest_hash, latest)
+        print('Nothing to deploy, source file in {0} is same as {1}'.format(source, latest))
         return False
     else:
         return source, destination
@@ -149,19 +150,19 @@ def cleanup(archive_dir_, latest_dir_, app_id):
         for file_ in archive_jars[1:]:
             os.remove(os.path.join(archive_dir_, file_))
     except IndexError:
-        print 'Nothing to remove in {0}'.format(archive_dir_)
+        print('Nothing to remove in {0}'.format(archive_dir_))
         pass
     try:
         for file_ in latest_jars[3:]:
             os.remove(os.path.join(latest_dir_, file_ ))
     except IndexError:
-        print 'Nothing to remove in {0}'.format(latest_dir_)
+        print('Nothing to remove in {0}'.format(latest_dir_))
         pass
     try:
-        print 'moving {0} to {1}'.format(os.path.join(latest_dir_, latest_jars[2]), os.path.join(archive_dir_, latest_jars[2]))
+        print('moving {0} to {1}'.format(os.path.join(latest_dir_, latest_jars[2]), os.path.join(archive_dir_, latest_jars[2])))
         move(os.path.join(latest_dir_, latest_jars[2]), os.path.join(archive_dir_, latest_jars[2]))
     except IndexError:
-        print 'Nothing to move from latest to archive'
+        print('Nothing to move from latest to archive')
         pass
 
 
@@ -171,26 +172,26 @@ def copy_to_latest(src_dest):
     destination = src_dest[1]
     try:
         shutil.copyfile(source, destination)
-        print 'Copying {0} to {1}'.format(source, destination)
+        print('Copying {0} to {1}'.format(source, destination))
         return True
     except shutil.Error:
-        print "Destination file exists or something bad happened"
+        print("Destination file exists or something bad happened")
         return True # test
 
 
 def create_symlink(current_jar, latest_jar):
     try:
         if os.readlink(current_jar) == latest_jar:
-            print 'Symlink {0} points to {1}, nothing to do'.format(current_jar, latest_jar)
+            print('Symlink {0} points to {1}, nothing to do'.format(current_jar, latest_jar))
             return False
         else:
             os.remove(current_jar)
             os.symlink(latest_jar, current_jar)
-            print 'Symlinked {0} to {1}'.format(current_jar, latest_jar)
+            print('Symlinked {0} to {1}'.format(current_jar, latest_jar))
             return True
     except OSError:
         os.symlink(latest_jar, current_jar)
-        print 'Created new symlink {0} to {1}'.format(current_jar, latest_jar)
+        print('Created new symlink {0} to {1}'.format(current_jar, latest_jar))
         return True
 
 
@@ -253,3 +254,4 @@ if __name__ == "__main__":
         link_only(current_jar_, app_id_)
     if args.action == "cleanup":
         cleanup(ARCHIVE_DIR, LATEST_DIR, app_id_)
+    print('')
