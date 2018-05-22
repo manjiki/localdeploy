@@ -9,12 +9,12 @@ import hashlib
 import sys
 import subprocess
 from shutil import move
-from io import BytesIO
 
 # NOTE: This script assumes that latest/, current/, archive/ directories are present
 # TODO: Remove jar from variable names, use "jar" extention as default though
 # TODO: Try dbus
 # TODO: check if service exists before performing any actions
+# TODO: Fix arguments
 
 global LATEST_DIR, ARCHIVE_DIR, CURRENT_DIR, TMP_DIR
 DEFAULT_PATH = '/etc/default'
